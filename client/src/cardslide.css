@@ -1,0 +1,8 @@
+.card-slide-enter {
+    transform: translateX(-100%);
+  }
+  
+  .card-slide-enter-active {
+    transform: translateX(0);
+    transition: transform 0.5s;
+  }
