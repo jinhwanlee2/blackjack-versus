@@ -3,43 +3,98 @@
 const express = require('express')
 const app = express()
 const cors = require('cors');
+app.use(express.json());
 app.use(cors());
 
 let gameState = null;
 
-const playerData = {};
-
-
-app.get('/api', (req, res) => {
-  const { playerId } = req.query;
-
-  // If playerId is not in the playerData object, create a new entry
-  if (!playerData[playerId]) {
-    playerData[playerId] = {
-      name: 'New Player', // Default name for new players
-      balance: 0, // Default balance for new players
-    };
-  }
-
-  // Respond with the player info
-  res.json(playerData[playerId]);
-});
-
-// POST request to update player data
-app.post('/api', (req, res) => {
-    const { playerId } = req.body; // Assuming the request contains playerId in the request body
-  
-    // If playerId is not in the playerData object, create a new entry
-    if (!playerData[playerId]) {
-      playerData[playerId] = {
-        name: 'New Player', // Default name for new players
-        balance: 0, // Default balance for new players
-      };
+let playerData = [
+    /*
+    {
+      playerId: 'player1', // Unique playerId for the first player
+      name: 'Player 1', // Default name for the first player
+      balance: 100000, // Default balance for the first player
+      hand: [],
+      sum: 0
+    },
+    {
+      playerId: 'player2', // Unique playerId for the second player
+      name: 'Player 2', // Default name for the second player
+      balance: 100000, // Default balance for the second player
+      hand: [],
+      sum: 0
+    },
+    */
+    {
+      playerId: 'dealer',
+      name: 'dealer',
+      balance: 9999999,
+      hand: [],
+      sum: 0
     }
-  
-    // Respond with the updated player info
-    res.json(playerData[playerId]);
-  });
+  ];
+
+
+app.route('/api')
+    .get((req, res) => {
+        const { playerId } = req.query;
+        const player = playerData.find(player => player.playerId === playerId);
+        res.json(playerData);
+    })
+
+    /*
+    if (!player) {
+        // If playerId is not found, create a new entry
+        const newPlayer = {
+          playerId,
+          name: 'New PlayerGETREQUEST', // Default name for new players
+          balance: 1110, // Default balance for new players
+        };
+        playerData.push(newPlayer);
+        res.json([newPlayer]);
+      } else {
+        res.json([player]);
+      }
+
+    const Player1 = {
+        playerId,
+        name: 'NEW PLAYER2', // Default name for new players
+        balance: 100000, // Default balance for new players
+      };
+      playerData.push(Player1);
+      
+    
+      const Player2 = {
+        playerId,
+        name: 'NEW PLAYER', // Default name for new players
+        balance: 100000, // Default balance for new players
+      };
+      playerData.push(Player2);
+      */
+
+      
+   
+
+      app.post('/api', (req, res) => {
+        const { playerId, name, balance } = req.body;
+        const player = playerData.find(player => player.playerId === playerId);
+      
+        if (player) {
+          // If playerId is found, update the player data
+          player.name = name || player.name; // Update name if provided in the request body
+          player.balance = balance || player.balance; // Update balance if provided in the request body
+          res.json([player]);
+        } else {
+          // If playerId is not found, create a new entry
+          const newPlayer = {
+            playerId,
+            name: name || 'New PlayeXr', // Default name for new players if not provided in the request body
+            balance: balance || 0, // Default balance for new players if not provided in the request body
+          };
+          playerData.push(newPlayer);
+          res.json([newPlayer]);
+        }
+      });
 
 
 /*app.post('/api', (req, res) => {

@@ -16,21 +16,38 @@ function App() {
   const [isPlayerConfirmed, setPlayerConfirmed] = useState(false);
 
 
+  /*
   useEffect(() => {
-    if (isPlayerConfirmed) {
+    
       // Fetch player data from the server when playerId is confirmed
-      fetch(`/api?playerId=${confirmedPlayerId}`)
-        .then((response) => response.json())
-        .then((data) => {
-          setBackendData(data);
-        });
-    }
+      axios.post('/api', { playerId: confirmedPlayerId })
+  .then(response => {
+    setBackendData(response.data); // Use response.data directly
+  })
+  .catch(error => {
+    console.error('Error fetching player data:', error);
+  });
+    
   }, [isPlayerConfirmed, confirmedPlayerId]);
 
-  const handleConfirm = () => {
+  */
+
+  const handleConfirm = async () => {
     setConfirmedPlayerId(playerId);
     setPlayerConfirmed(true);
   };
+
+  useEffect(() => {
+    if (isPlayerConfirmed) {
+      axios.post('/api', { playerId: confirmedPlayerId })
+        .then(response => {
+          setBackendData(response.data);
+        })
+        .catch(error => {
+          console.error('Error fetching player data:', error);
+        });
+    }
+  }, [isPlayerConfirmed, confirmedPlayerId]);
 
   const isGameReady = confirmedPlayerId !== '' && isPlayerConfirmed;
 
@@ -41,6 +58,8 @@ function App() {
       startGame();
     }
   }, [isGameReady]);
+
+  
 
   return (
     <div className="game">
@@ -59,6 +78,19 @@ function App() {
       {isGameReady ? (
         <>
           {/* Rest of your game elements */}
+          <div>
+          {isPlayerConfirmed ? (
+            backendData.map(player => (
+              <div key={player.playerId}>
+                <p>Player ID: {player.playerId}</p>
+                <p>Name: {player.name}</p>
+                <p>Balance: {player.balance}</p>
+              </div>
+            ))
+          ) : (
+            <p>Please confirm your playerId</p>
+          )}
+          </div>
           <h2>Dealer: <span id="dealer-sum"></span></h2>
           <div id="dealer-cards">
             <img id="hidden" src={back} alt="backside" />
