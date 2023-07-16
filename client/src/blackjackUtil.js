@@ -50,10 +50,7 @@ import H10 from './cards/10-H.png'
 import S10 from './cards/10-S.png'
 import D10 from './cards/10-D.png'
 import C10 from './cards/10-C.png'
-
-
 import './blackjack.css';
-import React, { useEffect, useState } from 'react';
 
 var dealerSum = 0;
 var yourSum = 0;
@@ -215,6 +212,7 @@ export async function startGame() {
   cardImg.classList.add("slide-in");
   dealerSum += getValue(card);
   dealerAceCount += checkAce(card);
+  
   document.getElementById("dealer-cards").append(cardImg);
   document.getElementById("dealer-sum").innerText = getValue(card);
 

@@ -1,154 +1,212 @@
-
-
 const express = require('express')
 const app = express()
 const cors = require('cors');
+const http = require('http');
+const WebSocket = require('ws');
 app.use(express.json());
 app.use(cors());
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ port: 8080 }); 
 
-let gameState = null;
+var deck;
+var hidden;
 
 let playerData = [
-    /*
-    {
-      playerId: 'player1', // Unique playerId for the first player
-      name: 'Player 1', // Default name for the first player
-      balance: 100000, // Default balance for the first player
-      hand: [],
-      sum: 0
-    },
-    {
-      playerId: 'player2', // Unique playerId for the second player
-      name: 'Player 2', // Default name for the second player
-      balance: 100000, // Default balance for the second player
-      hand: [],
-      sum: 0
-    },
-    */
     {
       playerId: 'dealer',
-      name: 'dealer',
-      balance: 9999999,
       hand: [],
-      sum: 0
+      sum: 0,
+      aceCount: 0
     }
-  ];
+];
 
+
+// Function to broadcast data to all connected clients
+function broadcastData(data) {
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify(data));
+      }
+    });
+  }
+
+wss.on('connection', (ws) => {
+    ws.onmessage = (event) => {
+
+        if (data.type === 'startOtherClients') {
+            const startGameMessage = {
+                type: 'startGameMessage',
+                gameStarted: true,
+              };
+              broadcastData(startGameMessage);
+          }
+
+      /*
+      // The server receives a message from the client
+      // You can parse the message to get the playerId or any other data needed
+      const data = JSON.parse(message);
+      const playerId = data.playerId;
+  
+      // Find the specific player data based on the playerId
+      const player = playerData.find((player) => player.playerId === playerId);
+  
+      // Send the player data to the specific client (using ws.send)
+      if (player) {
+        ws.send(JSON.stringify({ playerData: player }));
+      } */
+    };
+    ws.on('close', () => {
+      console.log('Client disconnected');
+    });
+  });
 
 app.route('/api')
-    .get((req, res) => {
+  .get((req, res) => {
         const { playerId } = req.query;
         const player = playerData.find(player => player.playerId === playerId);
         res.json(playerData);
-    })
-
-    /*
-    if (!player) {
-        // If playerId is not found, create a new entry
-        const newPlayer = {
-          playerId,
-          name: 'New PlayerGETREQUEST', // Default name for new players
-          balance: 1110, // Default balance for new players
-        };
-        playerData.push(newPlayer);
-        res.json([newPlayer]);
-      } else {
-        res.json([player]);
-      }
-
-    const Player1 = {
-        playerId,
-        name: 'NEW PLAYER2', // Default name for new players
-        balance: 100000, // Default balance for new players
-      };
-      playerData.push(Player1);
-      
-    
-      const Player2 = {
-        playerId,
-        name: 'NEW PLAYER', // Default name for new players
-        balance: 100000, // Default balance for new players
-      };
-      playerData.push(Player2);
-      */
-
-      
-   
-
-      app.post('/api', (req, res) => {
-        const { playerId, name, balance } = req.body;
+  })
+  app.post('/api', (req, res) => {
+        const { playerId } = req.body;
         const player = playerData.find(player => player.playerId === playerId);
       
         if (player) {
           // If playerId is found, update the player data
-          player.name = name || player.name; // Update name if provided in the request body
-          player.balance = balance || player.balance; // Update balance if provided in the request body
           res.json([player]);
         } else {
           // If playerId is not found, create a new entry
           const newPlayer = {
             playerId,
-            name: name || 'New PlayeXr', // Default name for new players if not provided in the request body
-            balance: balance || 0, // Default balance for new players if not provided in the request body
+            hand: [],
+            sum: 0,
+            aceCount: 0
           };
           playerData.push(newPlayer);
           res.json([newPlayer]);
         }
+  });
+  app.post('/api/build-deck', (req, res) => {
+        let value = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
+        let suit = ["H", "C", "D", "S"];
+        deck = [];
+
+        for (let i = 0; i < suit.length; i++) {
+            for (let j = 0; j < value.length; j++) {
+                deck.push(value[j] + "-" + suit[i]);
+            }
+        }
+        
+        // Send a success response to the client
+        res.sendStatus(200);
+  });
+  app.post('/api/shuffle-deck', (req, res) => {
+        for (let i = 0; i < deck.length; i++) {
+          let j = Math.floor(Math.random() * deck.length);
+          let temp = deck[i];
+          deck[i] = deck[j];
+          deck[j] = temp;
+        }
+      
+        // Send a success response to the client (status code 200)
+        res.sendStatus(200);
+  });
+  app.post('/api/start-game', (req, res) => {
+
+    wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          const gameState = {
+            type: 'startGameMessage',
+          };
+          client.send(JSON.stringify(gameState));
+        }
       });
 
 
-/*app.post('/api', (req, res) => {
-    const { playerId } = req.body;
-  
-    // If playerId is not in the playerData object, create a new entry
-    if (!playerData[playerId]) {
-      playerData[playerId] = {
-        name: 'New Player', // Default name for new players
-        balance: 0, // Default balance for new players
-      };
-    }
-  
-    // Respond with the player info
-    res.json(playerData[playerId]);
-  });
-*/
+        hidden = deck.pop();
+        const dealer = playerData.find(player => player.playerId === 'dealer');
+        var player;
+        dealer.sum += getValue(hidden);
+        dealer.aceCount += checkAce(hidden);
 
-/*app.get("/api", (req, res) => {
-    const { playerId } = req.query;
-    const playerInfo = playerData[playerId] || { name: 'New Player'};
-    res.json({"users": ["userOne", "userTwo", "userThree", playerInfo] })
-})
-*/
+        let card = deck.pop();
+        let cardData = {
+            type: 'dealerStart',
+            src: card,
+            value: getValue(card)
+        };
+        wss.clients.forEach((client) => {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(JSON.stringify(cardData));
+            }
+          });
+
+        dealer.sum += getValue(card);
+        dealer.aceCount += checkAce(card);
+
+        for (let j = 1; j < playerData.length; j++){
+            for (let i = 0; i < 2; i++) {
+           
+                player = playerData[j];
+                card = deck.pop();
+                player.sum += getValue(card);
+                player.aceCount += checkAce(card);
+                cardData = {
+                    type: 'clientStart',
+                    src: card,
+                    sum: player.sum
+                };
+                wss.clients.forEach((client) => {
+                    if (client.readyState === WebSocket.OPEN) {
+                      client.send(JSON.stringify(cardData));
+                    }
+                  });
+                if (player.sum > 21) {
+                    reduceAce(player.sum, player.aceCount);
+                }
+            }
+        } 
+        // Send a success response to the client (status code 200)
+        res.sendStatus(200);
+
+        // document.getElementById("hit").addEventListener("click", hit);
+        // document.getElementById("stand").addEventListener("click", stand);
+
+  });
+
 
 app.listen(5000, () => {console.log("Server started on port 5000") })
 
 
-/*
-function initializeGame() {
-    gameState = {
-        players: {
-            player1: {
-                hand: [],
-                score: 0,
-            },
-            player2: {
-                hand: [],
-                score: 0,
-            },
-        },
-        deck: [],
-        dealer: {
-            hand: [],
-            score: 0,
-        }
-    };
-}
-
-function joinGame(playerId) {
-    if (!this.state.playerOne) {
-      this.state[playerId] = "playerOne";
-    } else if (!this.state.playerTwo) {
-      this.state[playerId] = "playerTwo";
+function getValue(card) {
+    let data = card.split("-"); // "4-C" -> ["4", "C"]
+    let value = data[0];
+  
+    if (isNaN(value)) { //A J Q K
+      if (value === "A") {
+        return 11;
+      }
+      return 10;
     }
-}
-*/
+    return parseInt(value);
+  }
+
+  function checkAce(card) {
+    if (card[0] === "A") {
+      return 1;
+    }
+    return 0;
+  }
+
+
+  function reduceAce(playerSum, playerAceCount) {
+    while (playerSum > 21 && playerAceCount > 0) {
+      playerSum -= 10;
+      playerAceCount -= 1;
+    }
+    return playerSum;
+  }
+
+  async function delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
