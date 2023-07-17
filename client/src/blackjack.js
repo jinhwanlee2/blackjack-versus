@@ -8,7 +8,6 @@ import { cardToSrc } from './blackjackUtil';
 
 
 function App() {
-
   const [backendData, setBackendData] = useState([{}])
   const [playerId, setPlayerId] = useState('');
   const [confirmedPlayerId, setConfirmedPlayerId] = useState('');
@@ -16,6 +15,7 @@ function App() {
   const [isGameStarted, setGameStarted] = useState(false);
   const [socket, setSocket] = useState(null);
   const [message, setMessage] = useState('');
+  const [playersData, setPlayersData] = useState([]);
 
   const handleConfirm = async () => {
     setConfirmedPlayerId(playerId);
@@ -29,7 +29,6 @@ function App() {
   const startButton = async () => {
 
     setGameStarted(true);
-    
     await axios.post('/api/build-deck')
       .then((response) => {
         console.log('Build deck successful:', response.data);
@@ -76,6 +75,12 @@ function App() {
     ws.onopen = () => {
       console.log('WebSocket connection established');
       setSocket(ws);
+
+      const message ={
+        type: 'register',
+        playerId: confirmedPlayerId,
+      };
+      ws.send(JSON.stringify(message));
     };
 
     ws.onmessage = (event) => {
@@ -83,6 +88,9 @@ function App() {
       console.log('Received message from server:', data);
 
       // Handle incoming messages from the server as needed
+      if (data.playerData) {
+        setPlayersData(data.playerData);
+      }
       if (data.type === 'dealerStart') {
         const cardImg = document.createElement("img");
         cardImg.src = cardToSrc(data.src);
@@ -94,12 +102,18 @@ function App() {
         const cardImg = document.createElement("img");
         cardImg.src = cardToSrc(data.src);
         cardImg.classList.add("slide-in");
-        document.getElementById("your-cards").append(cardImg);
-        document.getElementById("your-sum").innerText = data.sum;
+     
+          setTimeout(() => {
+            document.getElementById(`player-${data.playerId}-cards`).append(cardImg);
+            if (data.playerId === confirmedPlayerId){
+              document.getElementById(`player-${data.playerId}-sum`).innerText = data.sum;
+            }
+          }, 500);
+        
+        
       }
-      if (data.type === 'signal') {
-        document.getElementById("your-sum").innerText = data.sum;
-      }
+    
+      
       if (data.type === 'startGameMessage') {
         setGameStarted(true);
       }
@@ -116,7 +130,7 @@ function App() {
         ws.close();
       }
     };
-  }, []);
+  }, [confirmedPlayerId]);
 
   // Function to send a message to the server
   const sendMessage = () => {
@@ -125,6 +139,8 @@ function App() {
       setMessage('');
     }
   };
+
+  
 
   return (
     <div className="game">
@@ -143,16 +159,16 @@ function App() {
       </button>
 
       <div>
-          {isPlayerConfirmed ? (
-            backendData.map(player => (
-              <div key={player.playerId}>
-                <p>Player ID: {player.playerId}</p>
-              </div>
-            ))
-          ) : (
-            <p>Please confirm your Player Id</p>
-          )}
-          </div>
+        {isPlayerConfirmed ? (
+          backendData.map(player => (
+            <div key={player.playerId}>
+              <p>Player ID: {player.playerId}</p>
+            </div>
+          ))
+        ) : (
+          <p>Please confirm your Player Id</p>
+        )}
+      </div>
       
       {isGameStarted ? (
         <>
@@ -161,8 +177,19 @@ function App() {
             <img id="hidden" src={back} alt="backside" />
           </div>
 
-          <h2>You: <span id="your-sum"></span></h2>
-          <div id="your-cards"></div>
+       
+          {playersData.slice(1).map((player) => (
+            <div key={player.playerId}>
+              <h2>
+                {player.playerId === confirmedPlayerId ? 'You: ' : `${player.playerId}:`}
+                <span id={`player-${player.playerId}-sum`}></span>
+              </h2>
+              <div
+                id={`player-${player.playerId}-cards`}
+                className={`cards-container ${player.playerId === confirmedPlayerId ? 'your-cards' : 'other-cards'}`}
+              ></div>
+            </div>
+          ))}
 
           <br />
           <button id="hit">Hit</button>
