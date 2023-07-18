@@ -11,7 +11,7 @@ const server = http.createServer(app);
 const wss = new WebSocket.Server({ port: 8080 }); 
 
 const playerConnections = new Map();
-
+var end = false;
 var stand = false;
 var playersLeft = 0;
 var actions = 0;
@@ -32,7 +32,8 @@ let playerData = [
 function broadcastData(data) {
     wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify(data));
+            const newData = { ...data, playerData: playerData };
+            client.send(JSON.stringify(newData));
         }
     });
 }
@@ -51,9 +52,57 @@ wss.on('connection', (ws) => {
         if (data.type === 'register') {
             playerConnections.set(data.playerId, ws);
         }
-        if (data.action === 'hit') {
-   
+        if (data.type === 'endGame') {
+            if (playersLeft === 0 && end === false){
+                end = true;
+                const dealer = playerData.find(player => player.playerId === 'dealer');
+                while (dealer.sum > 21 && dealer.aceCount > 0) {
+                    dealer.sum -= 10;
+                    dealer.aceCount -= 1;
+                }
+                let cardData = {
+                    type: 'dealerEnd',
+                    src: hidden,
+                    sum: dealer.sum
+                };
+                broadcastData(cardData);
+                while (dealer.sum < 17) {
+                    while (dealer.sum > 21 && dealer.aceCount > 0) {
+                        dealer.sum -= 10;
+                        dealer.aceCount -= 1;
+                    }
+                    let card = deck.pop();
+                    dealer.sum += getValue(card);
+                    dealer.aceCount += checkAce(card);
+                    let endDraw = {
+                        type: 'endDraw',
+                        src: card,
+                        sum: dealer.sum
+                    }
+                    broadcastData(endDraw);
+                }
+                const final = {
+                    type: 'final',
+                    sum: dealer.sum
+                }
+                broadcastData(final);
+                
+            }
+        }
+        if (data.action === 'stand') {
+            const player = playerData.find(player => player.playerId === data.playerId);
             const playerConnection = playerConnections.get(data.playerId);
+            playersLeft -= 1;
+            stand = true;
+            player.busted = true;
+            const Data = {
+                type: 'standResponse',
+                busted: stand,
+                playerData: playerData
+            };
+            playerConnection.send(JSON.stringify(Data));
+        }
+        if (data.action === 'hit') {
             let card = deck.pop();
             const player = playerData.find(player => player.playerId === data.playerId);
             player.sum += getValue(card);
@@ -68,8 +117,8 @@ wss.on('connection', (ws) => {
             if (player.sum > 21) { 
                 playersLeft -= 1;
                 stand = true;
+                player.busted = true;
             }
-                
             else {
                 stand = false;
             }
@@ -78,7 +127,8 @@ wss.on('connection', (ws) => {
                 src: card,
                 sum: player.sum,
                 playerId: player.playerId,
-                busted: stand
+                busted: stand,
+                playerData: playerData
             };
             wss.clients.forEach((client) => {
                 if (client.readyState === WebSocket.OPEN) {
@@ -88,49 +138,77 @@ wss.on('connection', (ws) => {
             // add if statement here and send to other clients with different type to differentiate other-cards to update
             busted = false; 
         }
-        if (data.action === 'stand') {
-            console.log('Stand');
-        }
         if (data.action === 'wantHit') {
-            var player = playerData.find(player => player.playerId === data.playerId);
-            const turnStart = {
-                type: 'turnStart',
-                value: true
-            }
+            const player = playerData.find(player => player.playerId === data.playerId);
+            let playerConnectionH = playerConnections.get(player.playerId);
             if (player.check === false){
                 player.action = 'hit';
                 actions += 1;
                 player.check = true;
             }
+      
+            const turnStart = {
+                type: 'turnStart',
+                value: true,
+                playerData: playerData
+            }
+            
             if (actions === playersLeft) {
+         
+                var players;
                 for (let j = 1; j < playerData.length; j++){
-                    player = playerData[j];
-                    player.check = false;
+                    players = playerData[j];
+                    players.check = false;
                 }
                 broadcastData(turnStart);
+                players.action = '';
                 actions = 0;
+                const doneWaiting = {
+                    type: 'doneWaiting'
+                }
+                broadcastData(doneWaiting);
+            }
+
+            else {
+                const waiting = {
+                    type: 'waiting'
+                }
+                playerConnectionH.send(JSON.stringify(waiting));
             }
         }
         if (data.action === 'wantStand') {
             var player = playerData.find(player => player.playerId === data.playerId);
             let playerConnectionS = playerConnections.get(player.playerId);
-            
-            const turnStart = {
-                type: 'turnStart',
-                value: true
-            }
             if (player.check === false){
                 player.action = 'stand';
                 actions += 1;
                 player.check = true;
+                player.busted = true;
             }
+            const turnStart = {
+                type: 'turnStart',
+                value: true,
+                playerData: playerData
+            }
+            
             if (actions === playersLeft) {
                 for (let j = 1; j < playerData.length; j++){
                     player = playerData[j];
                     player.check = false;
                 }
                 broadcastData(turnStart);
+                player.action = '';
                 actions = 0;
+                const doneWaiting = {
+                    type: 'doneWaiting'
+                }
+                broadcastData(doneWaiting);
+            }
+            else {
+                const waiting = {
+                    type: 'waiting'
+                }
+                playerConnectionS.send(JSON.stringify(waiting));
             }
         }
 
@@ -193,7 +271,8 @@ wss.on('connection', (ws) => {
                 check: false,
                 action: '',
                 sum: 0,
-                aceCount: 0
+                aceCount: 0,
+                busted: false
             };
             playerData.push(newPlayer);
             res.json([newPlayer]);
@@ -241,8 +320,6 @@ wss.on('connection', (ws) => {
                 client.send(JSON.stringify(gameState));
             }
         });
-        delay(2000);
-
         hidden = deck.pop();
         const dealer = playerData.find(player => player.playerId === 'dealer');
         var player;
@@ -338,9 +415,4 @@ function checkAce(card) {
     }
     return 0;
 }
-
-function delay(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 

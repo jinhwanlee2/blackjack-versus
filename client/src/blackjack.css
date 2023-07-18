@@ -63,6 +63,16 @@ body {
   margin: 1px;
 }
 
+
+
+.player-container {
+  display: flex;
+  flex-wrap: wrap; /* This will wrap the players to the next line when there's not enough space */
+  justify-content: space-between; /* This will space the players evenly across the container */
+  align-items: flex-start; /* This will align the players to the top of each column */
+  margin: 80px;
+}
+
 .cards-container {
   margin-top: 10px; 
 }
