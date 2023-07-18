@@ -5,11 +5,16 @@ const http = require('http');
 const WebSocket = require('ws');
 app.use(express.json());
 app.use(cors());
+
+
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ port: 8080 }); 
 
 const playerConnections = new Map();
 
+var stand = false;
+var playersLeft = 0;
+var actions = 0;
 var deck;
 var hidden;
 
@@ -17,7 +22,7 @@ var hidden;
 let playerData = [
     {
         playerId: 'dealer',
-        hand: [],
+        check: false,
         sum: 0,
         aceCount: 0
     }
@@ -33,7 +38,6 @@ function broadcastData(data) {
 }
 
 wss.on('connection', (ws) => {
-
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
 
@@ -43,12 +47,94 @@ wss.on('connection', (ws) => {
                 gameStarted: true,
             };
             broadcastData(startGameMessage);
-          
         }
-
         if (data.type === 'register') {
             playerConnections.set(data.playerId, ws);
         }
+        if (data.action === 'hit') {
+   
+            const playerConnection = playerConnections.get(data.playerId);
+            let card = deck.pop();
+            const player = playerData.find(player => player.playerId === data.playerId);
+            player.sum += getValue(card);
+            player.aceCount += checkAce(card);
+                
+            if (player.sum > 21 && player.aceCount > 0){
+                while (player.sum > 21 && player.aceCount > 0) {
+                    player.sum -= 10;
+                    player.aceCount -= 1;
+                }
+            }
+            if (player.sum > 21) { 
+                playersLeft -= 1;
+                stand = true;
+            }
+                
+            else {
+                stand = false;
+            }
+            const cardData = {
+                type: 'hitResponse',
+                src: card,
+                sum: player.sum,
+                playerId: player.playerId,
+                busted: stand
+            };
+            wss.clients.forEach((client) => {
+                if (client.readyState === WebSocket.OPEN) {
+                    client.send(JSON.stringify(cardData));
+                }
+            });
+            // add if statement here and send to other clients with different type to differentiate other-cards to update
+            busted = false; 
+        }
+        if (data.action === 'stand') {
+            console.log('Stand');
+        }
+        if (data.action === 'wantHit') {
+            var player = playerData.find(player => player.playerId === data.playerId);
+            const turnStart = {
+                type: 'turnStart',
+                value: true
+            }
+            if (player.check === false){
+                player.action = 'hit';
+                actions += 1;
+                player.check = true;
+            }
+            if (actions === playersLeft) {
+                for (let j = 1; j < playerData.length; j++){
+                    player = playerData[j];
+                    player.check = false;
+                }
+                broadcastData(turnStart);
+                actions = 0;
+            }
+        }
+        if (data.action === 'wantStand') {
+            var player = playerData.find(player => player.playerId === data.playerId);
+            let playerConnectionS = playerConnections.get(player.playerId);
+            
+            const turnStart = {
+                type: 'turnStart',
+                value: true
+            }
+            if (player.check === false){
+                player.action = 'stand';
+                actions += 1;
+                player.check = true;
+            }
+            if (actions === playersLeft) {
+                for (let j = 1; j < playerData.length; j++){
+                    player = playerData[j];
+                    player.check = false;
+                }
+                broadcastData(turnStart);
+                actions = 0;
+            }
+        }
+
+
         
 
       /*
@@ -69,8 +155,8 @@ wss.on('connection', (ws) => {
 
     const broadcastPlayersData = () => {
         const dataToSend = {
-          type: 'playerDataUpdate',
-          playerData: playerData,
+            type: 'playerDataUpdate',
+            playerData: playerData,
         };
     
         // Convert data to JSON and send it to all connected clients
@@ -104,7 +190,8 @@ wss.on('connection', (ws) => {
             // If playerId is not found, create a new entry
             const newPlayer = {
                 playerId,
-                hand: [],
+                check: false,
+                action: '',
                 sum: 0,
                 aceCount: 0
             };
@@ -122,7 +209,7 @@ wss.on('connection', (ws) => {
                 deck.push(value[j] + "-" + suit[i]);
             }
         }
-        
+        playersLeft = playerData.length - 1;
         // Send a success response to the client
         res.sendStatus(200);
     });
@@ -162,8 +249,6 @@ wss.on('connection', (ws) => {
         dealer.sum += getValue(hidden);
         dealer.aceCount += checkAce(hidden);
 
-        var otherCard;
-        var playerConnection;
         let card = deck.pop();
         let cardData = {
             type: 'dealerStart',
@@ -190,7 +275,10 @@ wss.on('connection', (ws) => {
                 player.aceCount += checkAce(card);
 
                 if (player.sum > 21) {
-                    reduceAce(player.sum, player.aceCount);
+                    while (player.sum > 21 && player.aceCount > 0) {
+                        player.sum -= 10;
+                        player.aceCount -= 1;
+                    }
                 }
                 cardData = {
                     type: 'clientStart',
@@ -249,14 +337,6 @@ function checkAce(card) {
         return 1;
     }
     return 0;
-}
-
-function reduceAce(playerSum, playerAceCount) {
-    while (playerSum > 21 && playerAceCount > 0) {
-        playerSum -= 10;
-        playerAceCount -= 1;
-    }
-    return playerSum;
 }
 
 function delay(ms) {

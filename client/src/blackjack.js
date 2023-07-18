@@ -1,11 +1,11 @@
 import back from './cards/BACK.png'
 import axios from 'axios';
 import './blackjack.css';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 
 import { cardToSrc } from './blackjackUtil';
 
-
+var busted = false;
 
 function App() {
   const [backendData, setBackendData] = useState([{}])
@@ -16,7 +16,53 @@ function App() {
   const [socket, setSocket] = useState(null);
   const [message, setMessage] = useState('');
   const [playersData, setPlayersData] = useState([]);
+  
+  const socketRef = useRef(null);
+  const handleHit = () => {
+    if (!busted && confirmedPlayerId && socketRef.current) {
+      // Send the message to the server using WebSocket
+      const message = {
+        type: 'action', 
+        action: 'hit',
+        playerId: confirmedPlayerId,
+        busted: busted
+      };
+      socketRef.current.send(JSON.stringify(message));
+    }
+  };
+  const handleStand = () => {
+    if (!busted && confirmedPlayerId && socketRef.current) {
+      // Send the message to the server using WebSocket
+      const message = {
+        type: 'action', 
+        action: 'stand',
+        playerId: confirmedPlayerId,
+        busted: busted
+      };
+      socketRef.current.send(JSON.stringify(message));
+    }
+  };
 
+
+  const wantHit = () => {
+    const message = {
+      action: 'wantHit',
+      playerId: confirmedPlayerId
+    }
+    socketRef.current.send(JSON.stringify(message));
+  }
+
+  const wantStand = () => {
+    const message = {
+      action: 'wantStand',
+      playerId: confirmedPlayerId
+    }
+    socketRef.current.send(JSON.stringify(message));
+  }
+
+
+
+  
   const handleConfirm = async () => {
     setConfirmedPlayerId(playerId);
     setPlayerConfirmed(true);
@@ -74,7 +120,17 @@ function App() {
 
     ws.onopen = () => {
       console.log('WebSocket connection established');
-      setSocket(ws);
+      setSocket(ws); 
+
+        /*
+        Commented out since handled by css (?)
+      const hitButton = document.getElementById("hit");
+      if (hitButton) {
+        hitButton.addEventListener("click", handleHit);
+      }
+      */ 
+
+      socketRef.current = ws;
 
       const message ={
         type: 'register',
@@ -86,6 +142,7 @@ function App() {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       console.log('Received message from server:', data);
+      var cardImg;
 
       // Handle incoming messages from the server as needed
       if (data.playerData) {
@@ -99,7 +156,7 @@ function App() {
         document.getElementById("dealer-sum").innerText = data.value;
       }
       if (data.type === 'clientStart') {
-        const cardImg = document.createElement("img");
+        cardImg = document.createElement("img");
         cardImg.src = cardToSrc(data.src);
         cardImg.classList.add("slide-in");
      
@@ -109,15 +166,28 @@ function App() {
               document.getElementById(`player-${data.playerId}-sum`).innerText = data.sum;
             }
           }, 500);
-        
-        
       }
-    
-      
       if (data.type === 'startGameMessage') {
         setGameStarted(true);
       }
-      
+      if (data.type === 'hitResponse') {
+        busted = data.busted;
+        cardImg = document.createElement("img");
+        cardImg.src = cardToSrc(data.src);
+        cardImg.classList.add("slide-in");
+        setTimeout(() => {
+          document.getElementById(`player-${data.playerId}-cards`).append(cardImg);
+          if (data.playerId === confirmedPlayerId){
+            document.getElementById(`player-${data.playerId}-sum`).innerText = data.sum;
+          }
+        }, 500);
+      }
+      if (data.type === 'turnStart') {
+        handleHit();
+      }
+      if (data.type === 'turnStand') {
+        handleStand();
+      }
     };
 
     ws.onclose = () => {
@@ -131,16 +201,6 @@ function App() {
       }
     };
   }, [confirmedPlayerId]);
-
-  // Function to send a message to the server
-  const sendMessage = () => {
-    if (socket) {
-      socket.send(JSON.stringify({ message: message }));
-      setMessage('');
-    }
-  };
-
-  
 
   return (
     <div className="game">
@@ -192,8 +252,12 @@ function App() {
           ))}
 
           <br />
-          <button id="hit">Hit</button>
-          <button id="stand">Stand</button>
+          <button id="hit" onClick={() => wantHit()}>
+            Hit
+          </button>
+          <button id="stand" onClick={() => wantStand()}>
+            Stand
+          </button>
           <p id="results"></p>
         </>
       ) : (
