@@ -14,11 +14,10 @@ function App() {
   const [confirmedPlayerId, setConfirmedPlayerId] = useState('');
   const [isPlayerConfirmed, setPlayerConfirmed] = useState(false);
   const [isGameStarted, setGameStarted] = useState(false);
-  const [socket, setSocket] = useState(null);
-  const [message, setMessage] = useState('');
   const [playersData, setPlayersData] = useState([]);
   const [isWaiting, setWaiting] = useState(false);
   const [showButtons, setShowButtons] = useState(true);
+  const [isGameEnded, setGameEnded] = useState(false);
   
   const socketRef = useRef(null);
   const handleHit = () => {
@@ -69,9 +68,6 @@ function App() {
 
   }
 
-
-
-  
   const handleConfirm = async () => {
     setConfirmedPlayerId(playerId);
     setPlayerConfirmed(true);
@@ -80,6 +76,42 @@ function App() {
   function delay(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
+
+  const restartGame = () => {
+    setGameStarted(false);
+    setGameEnded(false);
+
+    // Reset the cards in players' hands
+    document.querySelectorAll('.cards-container').forEach((container) => {
+      container.innerHTML = '';
+    });
+
+    // Reset dealer's hand
+    const dealerCardsContainer = document.getElementById('dealer-cards');
+    dealerCardsContainer.innerHTML = '';
+
+    // Create the hidden card
+    const hiddenCardImg = document.createElement('img');
+    hiddenCardImg.id = 'hidden';
+    hiddenCardImg.alt = 'backside';
+    hiddenCardImg.src = back;
+    dealerCardsContainer.appendChild(hiddenCardImg);
+
+    // Call the startGame function to begin a new game
+    busted = false;
+    end = false;    
+    document.getElementById("results").innerText = '';
+    setShowButtons(true);
+  };
+
+  const restart = async () => {
+    const restart = {
+      type: 'restart', 
+      playerId: confirmedPlayerId
+    };
+    socketRef.current.send(JSON.stringify(restart));
+  }
+
 
   const startButton = async () => {
 
@@ -129,16 +161,6 @@ function App() {
 
     ws.onopen = () => {
       console.log('WebSocket connection established');
-      setSocket(ws); 
-
-        /*
-        Commented out since handled by css (?)
-      const hitButton = document.getElementById("hit");
-      if (hitButton) {
-        hitButton.addEventListener("click", handleHit);
-      }
-      */ 
-
       socketRef.current = ws;
 
       const message ={
@@ -156,6 +178,9 @@ function App() {
       // Handle incoming messages from the server as needed
       if (data.playerData) {
         setPlayersData(data.playerData);
+      }
+      if (data.type === 'restartGame') {
+        restartGame();
       }
       if (data.type === 'waiting') {
         setWaiting(true);
@@ -185,17 +210,18 @@ function App() {
           cardImg.classList.add('slide-in');
           document.getElementById('dealer-cards').append(cardImg);
           document.getElementById('dealer-sum').innerText = data.sum;
-        }, 1000); 
+        }, data.draw * 500 + 1000); 
       }
       if (data.type === 'final') {
+        
         setTimeout(() => {
           if (!end) {
             const player = data.playerData.find((player) => player.playerId === confirmedPlayerId);
             let message = "";
+            // Outcome logic
             if (data.sum > 21) {
               message = "You win";
             }
-            //both you and dealer <= 21
             else if (player.sum === data.sum) {
                 message = "Tie";
             }
@@ -208,16 +234,16 @@ function App() {
             document.getElementById("results").innerText = message;
           }
       }, 1500); 
+      setGameEnded(true);
       }
       if (data.type === 'clientStart') {
-        cardImg = document.createElement("img");
-        cardImg.src = cardToSrc(data.src);
-        cardImg.classList.add("slide-in");
-     
-          setTimeout(() => {
-            document.getElementById(`player-${data.playerId}-cards`).append(cardImg);
-            document.getElementById(`player-${data.playerId}-sum`).innerText = data.sum;
-          }, 500);
+        setTimeout(() => {
+          cardImg = document.createElement("img");
+          cardImg.src = cardToSrc(data.src);
+          cardImg.classList.add("slide-in");
+          document.getElementById(`player-${data.playerId}-cards`).append(cardImg);
+          document.getElementById(`player-${data.playerId}-sum`).innerText = data.sum;
+        }, data.draw*500 + 500);
       }
       if (data.type === 'startGameMessage') {
         setGameStarted(true);
@@ -261,12 +287,15 @@ function App() {
             handleStand();
           }
       }
+      if (data.type === 'startGame') {
+        startButton();
+      }
    
     };
 
     ws.onclose = () => {
       console.log('WebSocket connection closed');
-      setSocket(null);
+   
     };
 
     return () => {
@@ -280,14 +309,14 @@ function App() {
     <div className="game">
       {!isGameStarted && (
         <>
-          {/* Input field for entering playerId */}
           <input
             type="text"
             value={playerId}
             onChange={(e) => setPlayerId(e.target.value)}
             placeholder="Enter your Player Id"
+            className = "confirm"
           />
-          <button onClick={handleConfirm}>Confirm PlayerId</button>
+          <button onClick={handleConfirm}>Confirm Player Id</button>
           <button onClick={startButton}>Start Game</button>
 
           <div>
@@ -303,6 +332,7 @@ function App() {
           </div>
         </>
       )}
+      
       
       {isGameStarted ? (
         <>
@@ -347,10 +377,12 @@ function App() {
         </>
       ) : (
         <>
-          {/* Render a loading or placeholder message */}
           <p>Waiting for game start...</p>
         </>
       )}
+    {isGameEnded && (
+      <button onClick={restart}>Restart Game</button>
+    )}
     </div>
   );
 }

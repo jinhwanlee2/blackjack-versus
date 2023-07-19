@@ -7,12 +7,6 @@
   pointer-events: none;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
 .App-header {
   background-color: #282c34;
   min-height: 100vh;
@@ -38,9 +32,9 @@
 }
 
 body {
+  color: white;
   font-family: Arial, Helvetica, sans-serif;
   text-align: center;
-
 }
 
 #dealer-cards img {
@@ -48,8 +42,6 @@ body {
   width: 125px;
   margin: 1px;
 }
-
-
 
 .your-cards img {
   height: 175px;
@@ -67,9 +59,9 @@ body {
 
 .player-container {
   display: flex;
-  flex-wrap: wrap; /* This will wrap the players to the next line when there's not enough space */
-  justify-content: space-between; /* This will space the players evenly across the container */
-  align-items: flex-start; /* This will align the players to the top of each column */
+  flex-wrap: wrap;
+  justify-content: space-between; 
+  align-items: flex-start; 
   margin: 80px;
 }
 
@@ -101,13 +93,12 @@ body {
   }
 }
 
-/* Apply the animation to the cards */
 .slide-in {
   animation: slideIn 0.5s ease;
 }
 
 .game {
-  /*background-image: url(./table.jpg);*/
+  font-family: 'Courier New', Courier, monospace;
   border-radius: 5px;
   color: #333;
   background-position: center;
@@ -118,7 +109,6 @@ body {
 }
 
 #results {
-  font-family: 'Courier New', Courier, monospace;
   font-weight: bold;
   font-size: 40px;
 }

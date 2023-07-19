@@ -41,7 +41,37 @@ function broadcastData(data) {
 wss.on('connection', (ws) => {
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
+        if (data.type === 'restart') {
+            var player;
+            let dealer = playerData[0];
+            dealer.check = false;
+            dealer.sum = 0;
+            dealer.aceCount = 0;
+            for (let j = 1; j < playerData.length; j++) {
+                player = playerData[j];
+                player.check = false;
+                player.action = '';
+                player.sum = 0;
+                player.aceCount = 0;
+                player.busted = false;
+            }
+            const restartGame = {
+                type: 'restartGame'
+            }
+            end = false;
+            stand = false;
+            playersLeft = 0;
+            actions = 0;
 
+            console.log('restart game');
+            broadcastData(restartGame);
+            const playerConnection = playerConnections.get(data.playerId);
+            const startGame = {
+                type: 'startGame'
+            }
+            playerConnection.send(JSON.stringify(startGame));
+
+        }
         if (data.type === 'startOtherClients') {
             const startGameMessage = {
                 type: 'startGameMessage',
@@ -53,6 +83,9 @@ wss.on('connection', (ws) => {
             playerConnections.set(data.playerId, ws);
         }
         if (data.type === 'endGame') {
+            let draw = 0;
+            console.log(playersLeft);
+            console.log(end);
             if (playersLeft === 0 && end === false){
                 end = true;
                 const dealer = playerData.find(player => player.playerId === 'dealer');
@@ -67,19 +100,21 @@ wss.on('connection', (ws) => {
                 };
                 broadcastData(cardData);
                 while (dealer.sum < 17) {
-                    while (dealer.sum > 21 && dealer.aceCount > 0) {
-                        dealer.sum -= 10;
-                        dealer.aceCount -= 1;
-                    }
                     let card = deck.pop();
                     dealer.sum += getValue(card);
                     dealer.aceCount += checkAce(card);
+                    if (dealer.sum > 21 && dealer.aceCount > 0) {
+                        dealer.sum -= 10;
+                        dealer.aceCount -= 1;
+                    }
                     let endDraw = {
                         type: 'endDraw',
                         src: card,
-                        sum: dealer.sum
+                        sum: dealer.sum,
+                        draw: draw
                     }
                     broadcastData(endDraw);
+                    draw++;
                 }
                 const final = {
                     type: 'final',
@@ -93,6 +128,9 @@ wss.on('connection', (ws) => {
             const player = playerData.find(player => player.playerId === data.playerId);
             const playerConnection = playerConnections.get(data.playerId);
             playersLeft -= 1;
+            if (playersLeft < 0) {
+                playersLeft = 0;
+            }
             stand = true;
             player.busted = true;
             const Data = {
@@ -116,6 +154,9 @@ wss.on('connection', (ws) => {
             }
             if (player.sum > 21) { 
                 playersLeft -= 1;
+                if (playersLeft < 0) {
+                    playersLeft = 0;
+                }
                 stand = true;
                 player.busted = true;
             }
@@ -135,7 +176,6 @@ wss.on('connection', (ws) => {
                     client.send(JSON.stringify(cardData));
                 }
             });
-            // add if statement here and send to other clients with different type to differentiate other-cards to update
             busted = false; 
         }
         if (data.action === 'wantHit') {
@@ -211,43 +251,10 @@ wss.on('connection', (ws) => {
                 playerConnectionS.send(JSON.stringify(waiting));
             }
         }
-
-
-        
-
-      /*
-      // The server receives a message from the client
-      // You can parse the message to get the playerId or any other data needed
-      const data = JSON.parse(message);
-      const playerId = data.playerId;
-  
-      // Find the specific player data based on the playerId
-      const player = playerData.find((player) => player.playerId === playerId);
-  
-      // Send the player data to the specific client (using ws.send)
-      if (player) {
-        ws.send(JSON.stringify({ playerData: player }));
-      } */
-
     };
 
-    const broadcastPlayersData = () => {
-        const dataToSend = {
-            type: 'playerDataUpdate',
-            playerData: playerData,
-        };
-    
-        // Convert data to JSON and send it to all connected clients
-        const jsonData = JSON.stringify(dataToSend);
-        ws.clients.forEach((client) => {
-          if (client.readyState === WebSocket.OPEN) {
-            client.send(jsonData);
-          }
-        });
-      };
     ws.on('close', () => {
         console.log('Client disconnected');
-        // process.exit(0);
     });
   });
 
@@ -307,7 +314,6 @@ wss.on('connection', (ws) => {
                 client.send(JSON.stringify(sendData));
             }
         });
-      
         // Send a success response to the client (status code 200)
         res.sendStatus(200);
     });
@@ -342,8 +348,9 @@ wss.on('connection', (ws) => {
 
         dealer.sum += getValue(card);
         dealer.aceCount += checkAce(card);
-
+        var draw;
         for (let j = 1; j < playerData.length; j++){
+            draw = 0;
             for (let i = 0; i < 2; i++) {
                 player = playerData[j];
                 playerConnection = playerConnections.get(player.playerId);
@@ -361,40 +368,21 @@ wss.on('connection', (ws) => {
                     type: 'clientStart',
                     src: card,
                     sum: player.sum,
-                    playerId: player.playerId
+                    playerId: player.playerId,
+                    draw: draw
                 };
                 wss.clients.forEach((client) => {
                     if (client.readyState === WebSocket.OPEN) {
                         client.send(JSON.stringify(cardData));
                     }
                 });
-                
-
-                /*     Tried to implement method to see other player hand, but maybe should use express js here
-                for (let k = 1; k < playerData.length && k != j; k++) {
-                    otherCard = {
-                        type: 'otherCards',
-                        src: card,
-                    }
-                    player = playerData[k];
-                    playerConnection = playerConnections.get(player.playerId);
-                    playerConnection.send(JSON.stringify(otherCard));
-                }
-                */
-                
+                draw++;     
             }
         } 
-        // Send a success response to the client (status code 200)
         res.sendStatus(200);
-
-        // document.getElementById("hit").addEventListener("click", hit);
-        // document.getElementById("stand").addEventListener("click", stand);
-
     });
 
-
 app.listen(5000, () => {console.log("Server started on port 5000") })
-
 
 function getValue(card) {
     let data = card.split("-"); // "4-C" -> ["4", "C"]
